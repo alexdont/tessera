@@ -13,4 +13,76 @@ defmodule TesseraTest do
                Tessera.generate("/nonexistent/path.jpg", output_dir)
     end
   end
+
+  describe "generate_manifest/3 with Tessera.Storage.Local" do
+    setup do
+      root =
+        Path.join(System.tmp_dir!(), "tessera-manifest-#{System.unique_integer([:positive])}")
+
+      on_exit(fn -> File.rm_rf!(root) end)
+      {:ok, root: root}
+    end
+
+    test "writes a valid DZI manifest", %{root: root} do
+      assert :ok =
+               Tessera.generate_manifest({4032, 3024}, "test-image",
+                 storage: Tessera.Storage.Local,
+                 storage_opts: [root: root]
+               )
+
+      manifest_path = Path.join(root, "test-image.dzi")
+      assert File.exists?(manifest_path)
+
+      content = File.read!(manifest_path)
+      assert content =~ ~s(Width="4032")
+      assert content =~ ~s(Height="3024")
+      assert content =~ ~s(TileSize="256")
+      assert content =~ ~s(Overlap="1")
+      assert content =~ ~s(Format="jpg")
+    end
+
+    test "creates intermediate directories from base_name with slashes", %{root: root} do
+      assert :ok =
+               Tessera.generate_manifest({100, 100}, "abc/abc",
+                 storage: Tessera.Storage.Local,
+                 storage_opts: [root: root]
+               )
+
+      assert File.exists?(Path.join([root, "abc", "abc.dzi"]))
+    end
+
+    test "honors :tile_size and :format options", %{root: root} do
+      assert :ok =
+               Tessera.generate_manifest({100, 100}, "custom",
+                 tile_size: 512,
+                 format: :png,
+                 storage: Tessera.Storage.Local,
+                 storage_opts: [root: root]
+               )
+
+      content = File.read!(Path.join(root, "custom.dzi"))
+      assert content =~ ~s(TileSize="512")
+      assert content =~ ~s(Format="png")
+    end
+  end
+
+  describe "generate_tile/4 input validation" do
+    test "errors when input file does not exist" do
+      assert {:error, :invalid_input} =
+               Tessera.generate_tile("/nonexistent.jpg", {0, 0, 0}, "x",
+                 image_width: 100,
+                 image_height: 100
+               )
+    end
+
+    test "errors when image dimensions are not supplied" do
+      # Need a real file to get past `ensure_input`
+      tmp = Path.join(System.tmp_dir!(), "tessera-noop-#{System.unique_integer([:positive])}.jpg")
+      File.write!(tmp, "not actually a jpeg")
+      on_exit(fn -> File.rm(tmp) end)
+
+      assert {:error, :missing_image_dims} =
+               Tessera.generate_tile(tmp, {0, 0, 0}, "x", [])
+    end
+  end
 end

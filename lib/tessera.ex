@@ -36,5 +36,7 @@ defmodule Tessera do
   """
 
   defdelegate generate(input_path, output_dir, opts \\ []), to: Tessera.TileGenerator
+  defdelegate generate_manifest(dimensions, base_name, opts \\ []), to: Tessera.TileGenerator
+  defdelegate generate_tile(input_path, coord, base_name, opts), to: Tessera.TileGenerator
   defdelegate viewer(assigns), to: Tessera.Viewer
 end
