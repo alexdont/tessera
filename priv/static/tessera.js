@@ -164,9 +164,76 @@
     return { type: "image", url: url };
   }
 
+  // Swap an open OSD viewer's tile source while preserving where the
+  // user was zoomed/panned. open() resets to home by default; we capture
+  // the current bounds and restore them on the new source's open event
+  // without animation, so visually it's just the image getting sharper
+  // (or fuzzier) — no jump back to fit-to-view.
+  function swapSourcePreservingBounds(viewer, url) {
+    var keepBounds = viewer.viewport.getBounds();
+    viewer.addOnceHandler("open", function() {
+      try { viewer.viewport.fitBounds(keepBounds, true); } catch (_) {}
+    });
+    try { viewer.open(tileSourceFor(url)); } catch (_) { /* ignore */ }
+  }
+
   // ---------------------------------------------------------------------------
   // Hook
   // ---------------------------------------------------------------------------
+
+  // Multiplier on each non-DZI layer's strict 1:1 zoom point. A small
+  // amount of upscaling is invisible; this gives every layer a 2× zoom
+  // budget past its strict threshold before we swap up.
+  var UPGRADE_HEADROOM = 2.0;
+
+  // Downgrade hysteresis: only fall back to a lower layer when zoom is
+  // 15% below the previous layer's upgrade threshold. Prevents flicker
+  // when the user oscillates around a boundary.
+  var DOWNGRADE_HYSTERESIS = 0.85;
+
+  function parseSources(el) {
+    var raw = el.dataset.sources;
+    if (!raw) return null;
+    try {
+      var parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch (_) {
+      console.warn("[Tessera] Failed to parse data-sources", raw);
+    }
+    return null;
+  }
+
+  // For each source, the zoom ratio (over home zoom) at which the layer
+  // should swap to the next one up. DZI / unknown-width sources get
+  // Infinity — they always count as the top layer.
+  function computeThresholds(sources, containerWidth) {
+    if (!containerWidth || containerWidth <= 0) {
+      return sources.map(function() { return Infinity; });
+    }
+    return sources.map(function(source) {
+      if (!source.width || isDziUrl(source.url)) return Infinity;
+      return (source.width / containerWidth) * UPGRADE_HEADROOM;
+    });
+  }
+
+  // Pick which layer index is appropriate for the current zoom ratio,
+  // applying hysteresis around the boundary between `currentLayer` and
+  // `currentLayer - 1`. Returns an index in [0, sources.length).
+  function pickLayer(currentLayer, ratio, thresholds) {
+    var next = currentLayer;
+
+    // Upgrade as far as needed (handles fast zooms that skip multiple layers).
+    while (next + 1 < thresholds.length && ratio > thresholds[next]) {
+      next += 1;
+    }
+
+    // Downgrade with hysteresis. Don't downgrade past 0.
+    while (next > 0 && ratio < thresholds[next - 1] * DOWNGRADE_HYSTERESIS) {
+      next -= 1;
+    }
+
+    return next;
+  }
 
   window.TesseraHooks.TesseraViewer = {
     mounted: function() {
@@ -175,16 +242,20 @@
         // Element may be gone (modal closed, navigation) before OSD loads.
         if (!self.el.isConnected) return;
 
-        var src = self.el.dataset.src;
-        if (!src) {
-          console.warn("[Tessera] Missing data-src on element", self.el);
+        var sources = parseSources(self.el);
+        if (!sources) {
+          console.warn("[Tessera] Missing or invalid data-sources on element", self.el);
           return;
         }
 
-        self.currentSrc = src;
+        self.sources = sources;
+        self.currentLayer = 0;
+        self.thresholds = computeThresholds(sources, self.el.clientWidth);
+        self.swapDebounce = null;
+
         self.viewer = window.OpenSeadragon({
           element: self.el,
-          tileSources: tileSourceFor(src),
+          tileSources: tileSourceFor(sources[0].url),
           // Built-in PNG sprite nav is replaced by our heroicon overlay.
           showNavigationControl: false,
           // Default 1.1 barely lets you zoom past 100% of native resolution.
@@ -211,51 +282,65 @@
 
         self.nav = buildNav(self.viewer, self.el);
 
-        // Optional progressive-quality swap. When `data-upgrade-src` is
-        // present and different from the initial src, leave it parked
-        // until the user actually zooms in past the home zoom level, then
-        // call viewer.open() once to switch to the higher-quality source.
-        var upgradeSrc = self.el.dataset.upgradeSrc;
-        if (upgradeSrc && upgradeSrc !== src) {
-          self.upgraded = false;
-          self.viewer.addHandler("zoom", function(e) {
-            if (self.upgraded) return;
-            var homeZoom = self.viewer.viewport.getHomeZoom();
-            // Wait for a clearly intentional zoom (2x the fit-to-view
-            // level) before triggering the swap. A small wheel nudge or
-            // layout-driven zoom jitter won't fire it.
-            if (e.zoom > homeZoom * 2) {
-              self.upgraded = true;
-              self.currentSrc = upgradeSrc;
+        // Recompute thresholds when the container resizes (modal fullscreen
+        // toggle, browser window resize). Layers themselves don't change —
+        // just the zoom ratios at which we swap between them.
+        if (typeof ResizeObserver === "function") {
+          self.resizeObserver = new ResizeObserver(function() {
+            self.thresholds = computeThresholds(self.sources, self.el.clientWidth);
+          });
+          self.resizeObserver.observe(self.el);
+        }
 
-              // Preserve where the user was zoomed into. open() resets the
-              // viewport to home by default; capture the current bounds and
-              // restore them as soon as the new source is open, without
-              // animation so there's no visible jump back to home.
-              var keepBounds = self.viewer.viewport.getBounds();
-              self.viewer.addOnceHandler("open", function() {
-                try { self.viewer.viewport.fitBounds(keepBounds, true); } catch (_) {}
-              });
+        // Multi-layer progressive zoom. As the user zooms, swap to whichever
+        // layer's native resolution best matches the viewport's current
+        // rendered pixel density. Each layer covers a zoom band:
+        //
+        //   layer 0 (lowest quality) | up to thresholds[0]
+        //   layer 1                  | thresholds[0] .. thresholds[1]
+        //   ...
+        //   layer N-1 (top, usually  | thresholds[N-2] .. ∞
+        //              a DZI source)
+        //
+        // The decision is debounced 200ms after the last zoom event.
+        // viewer.open() fires transient zoom events at the new source's
+        // home zoom before fitBounds restores the user's position; the
+        // debounce lets the viewport settle so those transients don't
+        // re-trigger a swap.
+        //
+        // Viewport bounds are preserved across each swap so the user
+        // never sees a jump to home.
+        if (sources.length > 1) {
+          self.viewer.addHandler("zoom", function() {
+            if (self.swapDebounce) clearTimeout(self.swapDebounce);
+            self.swapDebounce = setTimeout(function() {
+              self.swapDebounce = null;
+              if (!self.viewer || !self.viewer.viewport) return;
 
-              try { self.viewer.open(tileSourceFor(upgradeSrc)); } catch (_) { /* ignore */ }
-            }
+              var currentZoom = self.viewer.viewport.getZoom();
+              var homeZoom = self.viewer.viewport.getHomeZoom();
+              var ratio = currentZoom / homeZoom;
+
+              var nextLayer = pickLayer(self.currentLayer, ratio, self.thresholds);
+              if (nextLayer !== self.currentLayer) {
+                self.currentLayer = nextLayer;
+                swapSourcePreservingBounds(self.viewer, self.sources[nextLayer].url);
+              }
+            }, 200);
           });
         }
       });
     },
 
-    updated: function() {
-      // When the src assign changes, swap the source instead of re-creating
-      // the whole viewer. OSD's open() handles both DZI and simple-image inputs.
-      if (!this.viewer) return;
-      var newSrc = this.el.dataset.src;
-      if (newSrc && newSrc !== this.currentSrc) {
-        this.currentSrc = newSrc;
-        try { this.viewer.open(tileSourceFor(newSrc)); } catch (e) { /* ignore */ }
-      }
-    },
-
     destroyed: function() {
+      if (this.swapDebounce) {
+        clearTimeout(this.swapDebounce);
+        this.swapDebounce = null;
+      }
+      if (this.resizeObserver) {
+        this.resizeObserver.disconnect();
+        this.resizeObserver = null;
+      }
       if (this.nav && this.nav.parentNode) {
         this.nav.parentNode.removeChild(this.nav);
       }

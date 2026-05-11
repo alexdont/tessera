@@ -1,40 +1,61 @@
 defmodule Tessera.Viewer do
   @moduledoc """
-  Phoenix LiveView function component that mounts an OpenSeadragon viewer on
-  an image source. Accepts either a DZI manifest URL (deep zoom with tile
-  loading) or a plain image URL like `.jpg` / `.png` (basic pan + zoom on a
-  single image, no preprocessing required).
+  Phoenix LiveView function component that mounts an OpenSeadragon viewer
+  with **progressive multi-layer zoom**.
+
+  The component accepts an ordered list of `sources` (low → high quality)
+  and switches between them as the user zooms. Each layer covers the
+  zoom band where its native resolution is roughly 1:1 with the rendered
+  pixels; beyond that, the next layer up takes over. Layers are tagged
+  with their intrinsic pixel `width` so the client can compute
+  thresholds; layers without a width (typically a `.dzi` manifest) are
+  treated as the top layer with infinite zoom headroom.
 
   The component renders a `<div>` with `phx-hook="TesseraViewer"`. The
   client-side hook (defined in `priv/static/tessera.js`) lazy-loads
-  OpenSeadragon from jsDelivr on first mount, detects the source type from
-  the URL extension, and initializes OSD with the right tile source.
+  OpenSeadragon from jsDelivr on first mount, opens the first source,
+  then upgrades / downgrades the source as zoom crosses each layer's
+  threshold.
 
   ## Usage
 
-  Deep zoom (DZI pyramid, generated server-side via `Tessera.generate/3`):
+  Two-layer (medium → DZI):
 
       <Tessera.viewer
         id="photo"
-        src={~p"/dzi/photo.dzi"}
+        sources={[
+          %{url: ~p"/uploads/photo-medium.jpg", width: 1024},
+          %{url: ~p"/dzi/photo.dzi"}
+        ]}
         class="w-full h-[80vh] rounded"
       />
 
-  Basic pan + zoom on a plain image (no DZI required):
+  Three-layer (medium → large → DZI), useful for 4K+ images:
+
+      <Tessera.viewer
+        id="photo"
+        sources={[
+          %{url: ~p"/uploads/photo-medium.jpg", width: 1024},
+          %{url: ~p"/uploads/photo-large.jpg", width: 2560},
+          %{url: ~p"/dzi/photo.dzi"}
+        ]}
+        class="w-full h-[80vh] rounded"
+      />
+
+  Plain pan + zoom on a single image:
 
       <Tessera.viewer
         id="thumb"
-        src={~p"/uploads/photo.jpg"}
+        sources={[%{url: ~p"/uploads/photo.jpg"}]}
         class="w-full h-96"
       />
 
   ## Source detection
 
-  The client looks at the URL's path. If it ends in `.dzi` (with or without
-  a query string), OSD is configured with the DZI tile source. Otherwise the
-  URL is treated as a plain image and OSD uses its built-in "simple image"
-  tile source — pan and zoom work, but there's no progressive higher-res
-  loading because there are no tiles.
+  Each source's URL extension is sniffed at the JS layer. `.dzi` →
+  OpenSeadragon's DZI tile source; anything else → OSD's built-in
+  "simple image" tile source. Pan and zoom work either way; deep zoom
+  with progressive tile loading only kicks in for DZI sources.
 
   ## Parent app setup
 
@@ -52,33 +73,39 @@ defmodule Tessera.Viewer do
 
   attr(:id, :string, required: true, doc: "DOM id; must be unique on the page")
 
-  attr(:src, :string,
+  attr(:sources, :list,
     required: true,
-    doc:
-      "URL of the source: a `.dzi` manifest for deep zoom, or a plain image (`.jpg`, `.png`, etc.) for basic pan + zoom"
-  )
+    doc: """
+    Ordered low → high quality layers. Each entry is a map with:
 
-  attr(:upgrade_src, :string,
-    default: nil,
-    doc:
-      "Optional higher-quality source URL. When set, the viewer initially renders `src` and swaps to `upgrade_src` once the user zooms past the home zoom level. Useful for cheap previews (e.g., a medium-resolution image) that upgrade to deep zoom on demand."
+      * `:url` (required) — the source URL (a plain image or a `.dzi` manifest).
+      * `:width` (optional) — intrinsic pixel width of this source. Used to
+        compute the zoom range where this layer is "good enough". Omit
+        (or leave nil) for `.dzi` sources; DZI covers all zoom levels
+        natively and is treated as the top layer with infinite headroom.
+
+    The first entry is the initial render. The list must contain at
+    least one source.
+    """
   )
 
   attr(:class, :string, default: "w-full h-96", doc: "CSS classes for the viewer container")
   attr(:rest, :global)
 
   @doc """
-  Renders an OpenSeadragon viewer pointed at the given source URL.
+  Renders an OpenSeadragon viewer with progressive multi-layer zoom.
 
-  See the module docs for the deep-zoom vs. plain-image source detection rule.
+  See the module docs for the layer-threshold model.
   """
   def viewer(assigns) do
+    sources_json = Jason.encode!(assigns.sources)
+    assigns = assign(assigns, :sources_json, sources_json)
+
     ~H"""
     <div
       id={@id}
       phx-hook="TesseraViewer"
-      data-src={@src}
-      data-upgrade-src={@upgrade_src}
+      data-sources={@sources_json}
       class={@class}
       {@rest}
     >

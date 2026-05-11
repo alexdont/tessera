@@ -26,6 +26,7 @@ defmodule Tessera.MixProject do
     [
       {:phoenix_live_view, "~> 1.1"},
       {:phoenix_html, "~> 4.0"},
+      {:jason, "~> 1.4"},
       {:ex_doc, "~> 0.39", only: :dev, runtime: false}
     ]
   end
