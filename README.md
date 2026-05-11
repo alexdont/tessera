@@ -187,12 +187,6 @@ Reads / existence checks / deletes are the consumer's job — Tessera never read
 
 ---
 
-## How it fits with PhoenixKit
-
-Tessera has no [PhoenixKit](https://github.com/BeamLabEU/phoenix_kit) dependency, but its API is shaped so PhoenixKit (or any other Phoenix app) can call it inline: `generate*` functions take plain paths + storage opts, `<Tessera.viewer>` takes plain URLs. PhoenixKit's MediaBrowser uses Tessera's lazy generators with a `Storage` adapter that fans tile writes through PhoenixKit's multi-bucket `Storage.Manager`, so tiles replicate across every configured bucket alongside user uploads.
-
----
-
 ## License
 
 MIT — see [LICENSE](./LICENSE).
