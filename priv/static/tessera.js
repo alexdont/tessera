@@ -210,6 +210,37 @@
         });
 
         self.nav = buildNav(self.viewer, self.el);
+
+        // Optional progressive-quality swap. When `data-upgrade-src` is
+        // present and different from the initial src, leave it parked
+        // until the user actually zooms in past the home zoom level, then
+        // call viewer.open() once to switch to the higher-quality source.
+        var upgradeSrc = self.el.dataset.upgradeSrc;
+        if (upgradeSrc && upgradeSrc !== src) {
+          self.upgraded = false;
+          self.viewer.addHandler("zoom", function(e) {
+            if (self.upgraded) return;
+            var homeZoom = self.viewer.viewport.getHomeZoom();
+            // Wait for a clearly intentional zoom (2x the fit-to-view
+            // level) before triggering the swap. A small wheel nudge or
+            // layout-driven zoom jitter won't fire it.
+            if (e.zoom > homeZoom * 2) {
+              self.upgraded = true;
+              self.currentSrc = upgradeSrc;
+
+              // Preserve where the user was zoomed into. open() resets the
+              // viewport to home by default; capture the current bounds and
+              // restore them as soon as the new source is open, without
+              // animation so there's no visible jump back to home.
+              var keepBounds = self.viewer.viewport.getBounds();
+              self.viewer.addOnceHandler("open", function() {
+                try { self.viewer.viewport.fitBounds(keepBounds, true); } catch (_) {}
+              });
+
+              try { self.viewer.open(tileSourceFor(upgradeSrc)); } catch (_) { /* ignore */ }
+            }
+          });
+        }
       });
     },
 

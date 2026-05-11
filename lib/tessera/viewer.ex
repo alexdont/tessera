@@ -58,6 +58,12 @@ defmodule Tessera.Viewer do
       "URL of the source: a `.dzi` manifest for deep zoom, or a plain image (`.jpg`, `.png`, etc.) for basic pan + zoom"
   )
 
+  attr(:upgrade_src, :string,
+    default: nil,
+    doc:
+      "Optional higher-quality source URL. When set, the viewer initially renders `src` and swaps to `upgrade_src` once the user zooms past the home zoom level. Useful for cheap previews (e.g., a medium-resolution image) that upgrade to deep zoom on demand."
+  )
+
   attr(:class, :string, default: "w-full h-96", doc: "CSS classes for the viewer container")
   attr(:rest, :global)
 
@@ -72,6 +78,7 @@ defmodule Tessera.Viewer do
       id={@id}
       phx-hook="TesseraViewer"
       data-src={@src}
+      data-upgrade-src={@upgrade_src}
       class={@class}
       {@rest}
     >
