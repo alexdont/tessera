@@ -34,9 +34,10 @@ defmodule Tessera.MixProject do
   defp package do
     [
       name: "tessera",
+      maintainers: ["Alexander Don"],
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      files: ~w(lib priv mix.exs README.md)
+      files: ~w(lib priv mix.exs README.md LICENSE CHANGELOG.md)
     ]
   end
 
