@@ -196,6 +196,15 @@
           // user input more directly without going fully instant.
           animationTime: 0.3,
           springStiffness: 10,
+          // Keep the image fully clamped to the viewer rectangle. OSD's
+          // defaults (visibilityRatio 0.5, constrainDuringPan false) let
+          // the user drag the image until only half of it is on-screen
+          // and only snap back on release — felt loose and floaty.
+          // 1.0 + true together pin the image's edges to the viewport edges
+          // when zoomed out, and pin the viewport inside the image bounds
+          // when zoomed in. Either way, no empty space drift.
+          visibilityRatio: 1.0,
+          constrainDuringPan: true,
           gestureSettingsTouch: { pinchToZoom: true, dragToPan: true },
           gestureSettingsMouse: { scrollToZoom: true, dragToPan: true, clickToZoom: true, dblClickToZoom: true }
         });
