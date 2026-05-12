@@ -4,6 +4,68 @@ All notable changes to Tessera are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.0 — 2026-05-12
+
+**Breaking change**: Tessera no longer hosts its own image viewer. It's
+now a layer that composes onto [Fresco](https://hex.pm/packages/fresco).
+The Fresco viewer owns the OpenSeadragon instance, the Heroicons nav
+overlay, animations, and viewport clamping. Tessera focuses on what
+makes Tessera distinctive: the DZI source provider and the multi-layer
+progressive-zoom logic.
+
+### What changed
+
+- **Removed**: `<Tessera.viewer src=...>` LiveView component.
+- **Added**: `<Tessera.layer fresco_id sources>` — attaches Tessera's
+  behavior to a named Fresco viewer.
+- **Removed (moved to Fresco)**: the OSD lazy-loader, the Heroicons nav
+  overlay (`fresco-nav` now), the animation tuning constants
+  (`animationTime: 0.3` / `springStiffness: 10` defaults), the viewport
+  clamp (`visibilityRatio: 1.0` / `constrainDuringPan: true`), the
+  `swapSourcePreservingBounds` helper. All available via Fresco's
+  default viewer settings + viewer-handle API.
+- **Added (client side)**: Tessera now registers a DZI source provider
+  with Fresco at load time, so any URL ending in `.dzi` is automatically
+  treated as a tile pyramid.
+- **Unchanged**: `Tessera.generate/3`, `Tessera.generate_manifest/3`,
+  `Tessera.generate_tile/4`, the `Tessera.Storage` behaviour + the
+  default `Tessera.Storage.Local` adapter — the server-side generator
+  API is identical to 0.1. Migration from 0.1 only affects the template.
+
+### Required dependency change
+
+- Add `{:fresco, "~> 0.1"}` alongside `{:tessera, "~> 0.2"}` in your
+  `mix.exs`.
+- In `app.js`, import `fresco.js` **before** `tessera.js`. Spread both
+  hook namespaces into your LiveSocket hooks:
+  `{ ...window.FrescoHooks, ...window.TesseraHooks, ...colocatedHooks }`.
+
+### Migration from 0.1
+
+```diff
+- <Tessera.viewer
+-   id="photo"
+-   src={~p"/uploads/photo-medium.jpg"}
+-   class="w-full h-[80vh] rounded"
+- />
++ <Fresco.viewer
++   id="photo"
++   src={~p"/uploads/photo-medium.jpg"}
++   class="w-full h-[80vh] rounded"
++ />
++
++ <Tessera.layer
++   fresco_id="photo"
++   sources={[
++     %{url: ~p"/uploads/photo-medium.jpg", width: 1024},
++     %{url: ~p"/dzi/photo.dzi"}
++   ]}
++ />
+```
+
+The `sources` list shape is unchanged from 0.1; it moves from a
+`<Tessera.viewer sources=...>` attr to a `<Tessera.layer sources=...>` attr.
+
 ## 0.1.0 — 2026-05-11
 
 Initial release. OpenSeadragon-backed deep zoom for Phoenix apps —

@@ -2,6 +2,8 @@ defmodule TesseraTest do
   use ExUnit.Case
   doctest Tessera
 
+  import Phoenix.LiveViewTest
+
   describe "generate/3" do
     test "errors when input file does not exist" do
       output_dir =
@@ -83,6 +85,40 @@ defmodule TesseraTest do
 
       assert {:error, :missing_image_dims} =
                Tessera.generate_tile(tmp, {0, 0, 0}, "x", [])
+    end
+  end
+
+  describe "Tessera.layer/1" do
+    test "renders a hidden host element with the TesseraLayer hook + data-fresco-id + JSON sources" do
+      html =
+        render_component(&Tessera.layer/1,
+          fresco_id: "photo",
+          sources: [
+            %{url: "/medium.jpg", width: 1024},
+            %{url: "/dzi/photo.dzi"}
+          ]
+        )
+
+      assert html =~ ~s(phx-hook="TesseraLayer")
+      assert html =~ ~s(data-fresco-id="photo")
+      assert html =~ ~s(id="tessera-layer-photo")
+      # Sources JSON is HTML-encoded; verify the substrings are present.
+      assert html =~ "/medium.jpg"
+      assert html =~ "1024"
+      assert html =~ "/dzi/photo.dzi"
+      # Visually hidden — it's a hook host, not user-visible UI.
+      assert html =~ "hidden"
+    end
+
+    test "honors a custom :id" do
+      html =
+        render_component(&Tessera.layer/1,
+          fresco_id: "x",
+          id: "my-layer",
+          sources: [%{url: "/a.jpg"}]
+        )
+
+      assert html =~ ~s(id="my-layer")
     end
   end
 end

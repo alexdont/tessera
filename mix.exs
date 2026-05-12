@@ -1,8 +1,8 @@
 defmodule Tessera.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
-  @description "OpenSeadragon-backed deep zoom for Phoenix apps. Generate DZI tile pyramids from images via ImageMagick, render them with a LiveView component."
+  @version "0.2.0"
+  @description "DZI deep-zoom layer for Fresco-based image viewers in Phoenix. Generate DZI tile pyramids from images via ImageMagick; render them as a Fresco source-provider + multi-layer progressive zoom."
   @source_url "https://github.com/alexdont/tessera"
 
   def project do
@@ -24,6 +24,7 @@ defmodule Tessera.MixProject do
 
   defp deps do
     [
+      {:fresco, "~> 0.1"},
       {:phoenix_live_view, "~> 1.1"},
       {:phoenix_html, "~> 4.0"},
       {:jason, "~> 1.4"},
