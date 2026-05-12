@@ -48,7 +48,7 @@ defmodule Tessera.MixProject do
       source_ref: "v#{@version}",
       source_url: @source_url,
       main: "Tessera",
-      extras: ["README.md"]
+      extras: ["README.md", "CHANGELOG.md", "LICENSE"]
     ]
   end
 end
