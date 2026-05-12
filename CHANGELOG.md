@@ -4,6 +4,17 @@ All notable changes to Tessera are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.1 — 2026-05-12
+
+Patch release — package metadata polish only, no code or behavior
+changes.
+
+### Changed
+
+- `mix docs` extras now include `LICENSE` and `CHANGELOG.md`, so the
+  README's `[LICENSE](LICENSE)` reference resolves on HexDocs and the
+  CHANGELOG gets a proper standalone page in the published docs.
+
 ## 0.2.0 — 2026-05-12
 
 **Breaking change**: Tessera no longer hosts its own image viewer. It's
