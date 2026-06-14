@@ -88,6 +88,9 @@ defmodule Tessera.TileGenerator do
       args = [
         "convert",
         input_path,
+        # Respect EXIF orientation so tiles match the displayed image (see
+        # run_crop/5 for the lazy path).
+        "-auto-orient",
         "-define",
         "dzi:tile-size=#{tile_size}",
         "-define",
@@ -261,6 +264,12 @@ defmodule Tessera.TileGenerator do
       [
         "convert",
         input_path,
+        # Apply EXIF orientation BEFORE cropping so the crop coordinate system
+        # matches the displayed (EXIF-applied) image — otherwise a rotated
+        # source (e.g. a phone photo whose raw pixels are landscape but display
+        # portrait) yields crops from the wrong region/aspect and the tiles
+        # render distorted over an otherwise-correct base image.
+        "-auto-orient",
         "-crop",
         "#{src_w}x#{src_h}+#{src_x}+#{src_y}",
         "+repage",

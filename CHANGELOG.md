@@ -36,11 +36,19 @@ transform.
   actually happening.
 - **DZI tile streaming.** When `dzi_url` is set and the user zooms past the
   sharpest raster source, Tessera lazily fetches the `.dzi` manifest and
-  streams the visible tiles at the matching pyramid level into a passive
-  overlay aligned to the Fresco transform (re-rendered on the handle's
-  `animation`/`pan`/`zoom`/`resize`/`open` events). Off-screen tiles and
-  the manifest itself are fetched lazily; the overlay clears when the user
-  zooms back below the activation threshold.
+  streams the visible tiles at the matching pyramid level. The tile overlay
+  is parented **inside Fresco's stage** and positioned in stage coordinates,
+  so the tiles ride the same GPU transform as the base image and stay glued
+  to it during pan/zoom (no focal-point drift). Tiles only activate when the
+  DZI is genuinely higher-resolution than the top raster — otherwise they'd
+  add no detail. Off-screen tiles and the manifest are fetched lazily; the
+  overlay clears when the user zooms back below the threshold.
+
+### Fixed
+
+- **Tile generation now respects EXIF orientation** (`-auto-orient` before
+  cropping), so tiles from a rotated source line up with the displayed image
+  instead of being cut from the raw, mis-oriented pixels.
 
 ### Unchanged
 

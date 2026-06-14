@@ -201,21 +201,12 @@
       self.dziUrl = self.el.dataset.dziUrl || null;
       self.attrDebug = self.el.dataset.debug != null;
       self.debug = self.attrDebug || tesseraDebugFlag();
-      // One-line mount marker so you can confirm in the console that this
-      // (0.3) build is actually running and whether debug + DZI are active.
-      console.log(
-        "[Tessera] 0.3 layer mounted — debug:", self.debug,
-        "dzi:", !!self.dziUrl,
-        "sources:", self.widths,
-        "(toggle HUD: localStorage.tesseraDebug='1' or window.tesseraDebug=true, then pan/zoom)"
-      );
       self.currentLayer = 0;
       self.swapDebounce = null;
       self.tilesActive = false;
       self.manifest = null;
       self.manifestPending = false;
       self.tiles = {};        // "level/col/row" -> <img>
-      self.rafPending = false;
       self.unsubs = [];
 
       window.Fresco.onReady(frescoId, function(handle) {
@@ -244,17 +235,18 @@
         }));
       }
 
-      // Subscribe to the transform events that drive the DZI overlay and the
-      // debug HUD. Always subscribed (the per-frame work no-ops when there's
-      // no DZI and debug is off) so the HUD can be toggled live at runtime
-      // without a reload — it appears on the next pan/zoom.
-      var schedule = function() { self._scheduleRender(); };
-      self.unsubs.push(handle.on("animation", schedule));
-      self.unsubs.push(handle.on("pan", schedule));
-      self.unsubs.push(handle.on("zoom", schedule));
-      self.unsubs.push(handle.on("resize", schedule));
-      self.unsubs.push(handle.on("open", schedule));
-      self._scheduleRender();
+      // Render the DZI overlay (and HUD) SYNCHRONOUSLY on Fresco's transform
+      // events. Fresco re-lays-out its image every animation frame via JS
+      // (applyChildren sets each image's left/top/width/height in px); if we
+      // deferred to our own requestAnimationFrame we'd render one frame behind,
+      // so the tiles would lag/squish during a zoom and only settle when it
+      // stops. `animation` fires on every transform-write frame, covering pan +
+      // zoom; resize/open catch the lifecycle moments. Matches Etcher.
+      var render = function() { self._render(); };
+      self.unsubs.push(handle.on("animation", render));
+      self.unsubs.push(handle.on("resize", render));
+      self.unsubs.push(handle.on("open", render));
+      self._render();
     },
 
     // ---- Progressive raster swap ------------------------------------------
@@ -275,18 +267,14 @@
 
     // ---- DZI tile overlay --------------------------------------------------
 
-    _scheduleRender: function() {
+    _render: function() {
       var self = this;
-      if (self.rafPending) return;
-      self.rafPending = true;
-      requestAnimationFrame(function() {
-        self.rafPending = false;
-        // Re-read the flag each frame so the HUD can be toggled at runtime.
-        self.debug = self.attrDebug || tesseraDebugFlag();
-        if (self.dziUrl) self._renderTiles();
-        if (self.debug) self._updateHud();
-        else self._removeHud();
-      });
+      if (!self.handle) return;
+      // Re-read the flag each call so the HUD can be toggled at runtime.
+      self.debug = self.attrDebug || tesseraDebugFlag();
+      if (self.dziUrl) self._renderTiles();
+      if (self.debug) self._updateHud();
+      else self._removeHud();
     },
 
     _renderTiles: function() {
@@ -317,6 +305,17 @@
         return; // re-renders once the manifest resolves
       }
 
+      // Only stream tiles when the DZI is actually higher-resolution than the
+      // sharpest raster source. If they're the same size (the DZI was built
+      // from the same image as the top raster), tiles add no detail and would
+      // just overlay redundant, overlapping tiles on an identical image — so
+      // skip and let the raster show. This is the gigapixel case: tiles matter
+      // when the full image dwarfs the largest pre-rendered variant.
+      if (self.topWidth > 0 && self.manifest.width <= self.topWidth * 1.05) {
+        self._clearTiles();
+        return;
+      }
+
       self._ensureOverlay();
       self._paint(d);
     },
@@ -334,7 +333,7 @@
           if (!m) { console.warn("[Tessera] Unparseable DZI manifest", self.dziUrl); return; }
           self.manifest = m;
           self.manifestPending = false;
-          self._scheduleRender();
+          self._render();
         })
         .catch(function(err) {
           self.manifestPending = false;
@@ -345,18 +344,28 @@
     _ensureOverlay: function() {
       var self = this;
       if (self.overlay) return;
-      var container = self.handle.container;
-      if (getComputedStyle(container).position === "static") {
-        container.style.position = "relative";
-      }
+      // Attach the overlay INSIDE Fresco's stage (the element that carries the
+      // `translate3d(...) rotate(...)` transform). Tiles are then positioned in
+      // the stage's own coordinate space (canvas-px × scale) — exactly like
+      // Fresco positions its base <img>s — so they ride the same GPU transform
+      // and can never desync from the image during a zoom/pan animation (which
+      // is what caused the focal-point "squish": main-thread JS positioning
+      // lagging the compositor-driven stage transform).
+      var stage =
+        self.handle.container.querySelector("[data-fresco-stage]") ||
+        self.handle.container.querySelector(".fresco-stage");
+      if (!stage) return;
       var overlay = document.createElement("div");
       overlay.className = "tessera-overlay";
       overlay.style.position = "absolute";
-      overlay.style.inset = "0";
-      overlay.style.overflow = "hidden";
+      overlay.style.left = "0";
+      overlay.style.top = "0";
+      overlay.style.width = "0";
+      overlay.style.height = "0";
+      overlay.style.overflow = "visible";
       // Passive: never intercept Fresco's pan/zoom gestures.
       overlay.style.pointerEvents = "none";
-      container.appendChild(overlay);
+      stage.appendChild(overlay);
       self.overlay = overlay;
     },
 
@@ -369,23 +378,18 @@
       var t = handle.getTransform();
       if (!size || !t) return;
 
-      // Map the DZI pyramid onto the image's ACTUAL canvas-px rect (position +
-      // size), per axis. Anchoring to the real image bounds — rather than
-      // assuming the image fills getCanvasSize() from the origin, and rather
-      // than reusing one width-based ratio for both axes — keeps tiles glued to
-      // the image even when the canvas is larger than the image or the variant
-      // aspect ratio differs slightly from the DZI's by rounding.
+      // Tiles live INSIDE the stage, so positions are in the stage's own
+      // coordinate space: canvas-px × scale (the same space Fresco lays its
+      // base <img>s out in — `im.style.left = r.x * s`). Map the DZI pyramid
+      // onto the image's actual canvas-px rect, per axis, so it stays glued
+      // even if the canvas is larger than the image or the aspect differs
+      // slightly by rounding.
+      var s = t.s;
       var imgs = typeof handle.getImages === "function" ? handle.getImages() : null;
       var rect =
         imgs && imgs.length
           ? imgs[0]
           : { x: 0, y: 0, width: size.width, height: size.height };
-
-      // imageToScreen returns PAGE coords (it adds the viewer element's
-      // getBoundingClientRect). Our overlay is positioned container-relative,
-      // so subtract the container origin — otherwise every tile is shifted by
-      // the viewer's position on the page.
-      var cr = handle.container.getBoundingClientRect();
 
       // Choose the pyramid level whose width first covers the displayed width.
       var level = clamp(
@@ -396,7 +400,7 @@
       var levelScale = Math.pow(2, m.maxLevel - level); // full-px per level-px
       var levelW = Math.ceil(m.width / levelScale);
       var levelH = Math.ceil(m.height / levelScale);
-      // level-px -> canvas-px, per axis (the space imageToScreen consumes).
+      // level-px -> canvas-px, per axis.
       var levelToCanvasX = levelScale * (rect.width / m.width);
       var levelToCanvasY = levelScale * (rect.height / m.height);
 
@@ -433,21 +437,13 @@
           var natW = olLeft + Math.min(m.tileSize, levelW - tileX) + olRight;
           var natH = olTop + Math.min(m.tileSize, levelH - tileY) + olBottom;
 
-          // Tile rect in level-px (incl overlap) -> canvas-px, then both
-          // corners through imageToScreen. Sizing from the two projected
-          // corners (rather than scale × natW) guarantees the on-screen size
-          // matches the position exactly, regardless of how the handle defines
-          // its scale.
+          // Tile rect in level-px (incl overlap) -> stage-px (canvas-px × s).
           var oLevelX = tileX - olLeft;
           var oLevelY = tileY - olTop;
-          var tl = handle.imageToScreen({
-            x: rect.x + oLevelX * levelToCanvasX,
-            y: rect.y + oLevelY * levelToCanvasY
-          });
-          var br = handle.imageToScreen({
-            x: rect.x + (oLevelX + natW) * levelToCanvasX,
-            y: rect.y + (oLevelY + natH) * levelToCanvasY
-          });
+          var leftPx = (rect.x + oLevelX * levelToCanvasX) * s;
+          var topPx = (rect.y + oLevelY * levelToCanvasY) * s;
+          var wPx = natW * levelToCanvasX * s;
+          var hPx = natH * levelToCanvasY * s;
 
           var img = self.tiles[key];
           if (!img) {
@@ -455,29 +451,23 @@
             img.decoding = "async";
             img.draggable = false;
             img.style.position = "absolute";
-            img.style.transformOrigin = "top left";
             img.style.pointerEvents = "none";
             img.style.userSelect = "none";
-            // Refresh once the tile arrives so the HUD's loaded/loading
-            // counts settle even when the viewer is idle (no more frames).
+            // Refresh once the tile arrives so the HUD's loaded/loading counts
+            // settle even when the viewer is idle (no more frames).
             if (self.debug) {
-              img.addEventListener("load", function() { self._scheduleRender(); });
-              img.addEventListener("error", function() { self._scheduleRender(); });
+              img.addEventListener("load", function() { self._render(); });
+              img.addEventListener("error", function() { self._render(); });
             }
             img.src = parts.base + "/" + level + "/" + col + "_" + row + "." + m.format + parts.query;
             self.overlay.appendChild(img);
             self.tiles[key] = img;
           }
 
-          // Container-relative position (subtract the container origin), then
-          // round position down / size up by the fractional remainder so
-          // adjacent tiles never leave a sub-pixel seam.
-          var left = Math.floor(tl.x - cr.left);
-          var top = Math.floor(tl.y - cr.top);
-          img.style.left = left + "px";
-          img.style.top = top + "px";
-          img.style.width = Math.ceil(br.x - cr.left - left) + "px";
-          img.style.height = Math.ceil(br.y - cr.top - top) + "px";
+          img.style.left = leftPx + "px";
+          img.style.top = topPx + "px";
+          img.style.width = wPx + "px";
+          img.style.height = hPx + "px";
         }
       }
 
