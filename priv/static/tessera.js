@@ -371,7 +371,6 @@
 
       var canvasW = size.width;
       var fullToCanvas = canvasW / m.width;       // DZI full-px -> canvas-px
-      var s = t.s;                                 // canvas-px -> screen-px
 
       // Choose the pyramid level whose width first covers the displayed width.
       var level = clamp(
@@ -382,7 +381,8 @@
       var levelScale = Math.pow(2, m.maxLevel - level); // full-px per level-px
       var levelW = Math.ceil(m.width / levelScale);
       var levelH = Math.ceil(m.height / levelScale);
-      var levelToScreen = (1 / levelScale) * fullToCanvas * s; // level-px -> screen-px
+      // level-px -> canvas-px (the space imageToScreen consumes).
+      var levelToCanvas = levelScale * fullToCanvas;
 
       var cols = Math.ceil(levelW / m.tileSize);
       var rows = Math.ceil(levelH / m.tileSize);
@@ -419,12 +419,21 @@
           var natW = olLeft + Math.min(m.tileSize, levelW - tileX) + olRight;
           var natH = olTop + Math.min(m.tileSize, levelH - tileY) + olBottom;
 
-          // Top-left of the tile image (incl overlap) -> canvas-px -> screen-px.
-          var originCanvas = {
-            x: (tileX - olLeft) * levelScale * fullToCanvas,
-            y: (tileY - olTop) * levelScale * fullToCanvas
-          };
-          var screen = handle.imageToScreen(originCanvas);
+          // Tile rect in level-px (incl overlap) -> canvas-px, then both
+          // corners through imageToScreen. Sizing from the two projected
+          // corners (rather than scale × natW) guarantees the on-screen size
+          // matches the position exactly, regardless of how the handle defines
+          // its scale.
+          var oLevelX = tileX - olLeft;
+          var oLevelY = tileY - olTop;
+          var tl = handle.imageToScreen({
+            x: oLevelX * levelToCanvas,
+            y: oLevelY * levelToCanvas
+          });
+          var br = handle.imageToScreen({
+            x: (oLevelX + natW) * levelToCanvas,
+            y: (oLevelY + natH) * levelToCanvas
+          });
 
           var img = self.tiles[key];
           if (!img) {
@@ -446,10 +455,14 @@
             self.tiles[key] = img;
           }
 
-          img.style.left = screen.x + "px";
-          img.style.top = screen.y + "px";
-          img.style.width = (natW * levelToScreen) + "px";
-          img.style.height = (natH * levelToScreen) + "px";
+          // Round position down and size up by the fractional remainder so
+          // adjacent tiles never leave a sub-pixel seam.
+          var left = Math.floor(tl.x);
+          var top = Math.floor(tl.y);
+          img.style.left = left + "px";
+          img.style.top = top + "px";
+          img.style.width = Math.ceil(br.x - left) + "px";
+          img.style.height = Math.ceil(br.y - top) + "px";
         }
       }
 
