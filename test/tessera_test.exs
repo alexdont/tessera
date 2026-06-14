@@ -141,5 +141,24 @@ defmodule TesseraTest do
 
       refute html =~ "data-dzi-url"
     end
+
+    test "renders data-debug when debug is enabled, omits it otherwise" do
+      on =
+        render_component(&Tessera.layer/1,
+          fresco_id: "photo",
+          sources: [%{url: "/medium.jpg", width: 1024}],
+          debug: true
+        )
+
+      assert on =~ "data-debug"
+
+      off =
+        render_component(&Tessera.layer/1,
+          fresco_id: "photo",
+          sources: [%{url: "/medium.jpg", width: 1024}]
+        )
+
+      refute off =~ "data-debug"
+    end
   end
 end

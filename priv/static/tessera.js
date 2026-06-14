@@ -141,6 +141,24 @@
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
+  // Runtime debug toggle: works in any environment without recompiling —
+  // `localStorage.tesseraDebug = "1"` then reload.
+  function tesseraDebugFlag() {
+    try {
+      return !!(window.localStorage && localStorage.getItem("tesseraDebug") === "1");
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Short human label for a raster source: file name (sans query) + width.
+  function sourceLabel(src) {
+    if (!src || !src.url) return "?";
+    var u = src.url.split("?")[0];
+    var name = u.substring(u.lastIndexOf("/") + 1) || u;
+    return name + (src.width ? " (" + src.width + "px)" : "");
+  }
+
   // ===========================================================================
   // TesseraLayer hook
   // ===========================================================================
@@ -179,6 +197,7 @@
       }, 0);
 
       self.dziUrl = self.el.dataset.dziUrl || null;
+      self.debug = (self.el.dataset.debug != null) || tesseraDebugFlag();
       self.currentLayer = 0;
       self.swapDebounce = null;
       self.tilesActive = false;
@@ -214,9 +233,10 @@
         }));
       }
 
-      // DZI tile overlay: re-render aligned to the transform on every
-      // animation frame Fresco writes, plus lifecycle moments.
-      if (self.dziUrl) {
+      // DZI tile overlay (and/or debug HUD): re-render aligned to the
+      // transform on every animation frame Fresco writes, plus lifecycle
+      // moments. The HUD alone also needs these so it tracks live zoom.
+      if (self.dziUrl || self.debug) {
         var schedule = function() { self._scheduleRender(); };
         self.unsubs.push(handle.on("animation", schedule));
         self.unsubs.push(handle.on("pan", schedule));
@@ -251,7 +271,8 @@
       self.rafPending = true;
       requestAnimationFrame(function() {
         self.rafPending = false;
-        self._renderTiles();
+        if (self.dziUrl) self._renderTiles();
+        if (self.debug) self._updateHud();
       });
     },
 
@@ -401,6 +422,12 @@
             img.style.transformOrigin = "top left";
             img.style.pointerEvents = "none";
             img.style.userSelect = "none";
+            // Refresh once the tile arrives so the HUD's loaded/loading
+            // counts settle even when the viewer is idle (no more frames).
+            if (self.debug) {
+              img.addEventListener("load", function() { self._scheduleRender(); });
+              img.addEventListener("error", function() { self._scheduleRender(); });
+            }
             img.src = parts.base + "/" + level + "/" + col + "_" + row + "." + m.format + parts.query;
             self.overlay.appendChild(img);
             self.tiles[key] = img;
@@ -421,6 +448,24 @@
           delete self.tiles[k];
         }
       }
+
+      // Per-frame stats for the debug HUD.
+      if (self.debug) {
+        var loaded = 0, loading = 0;
+        for (var sk in self.tiles) {
+          var im = self.tiles[sk];
+          if (im.complete && im.naturalWidth > 0) loaded++;
+          else loading++;
+        }
+        self._stats = {
+          level: level,
+          levelW: levelW,
+          levelH: levelH,
+          shown: (colEnd - colStart + 1) * (rowEnd - rowStart + 1),
+          loaded: loaded,
+          loading: loading
+        };
+      }
     },
 
     _clearTiles: function() {
@@ -430,6 +475,71 @@
         if (img && img.parentNode) img.parentNode.removeChild(img);
       }
       self.tiles = {};
+    },
+
+    // ---- Debug HUD ---------------------------------------------------------
+
+    _ensureHud: function() {
+      var self = this;
+      if (self.hud) return;
+      var container = self.handle.container;
+      if (getComputedStyle(container).position === "static") {
+        container.style.position = "relative";
+      }
+      var hud = document.createElement("div");
+      hud.className = "tessera-hud";
+      hud.style.cssText = [
+        "position:absolute", "top:8px", "left:8px", "z-index:50",
+        "font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace",
+        "white-space:pre", "color:#e5e7eb", "background:rgba(17,24,39,0.82)",
+        "padding:8px 10px", "border-radius:8px", "pointer-events:none",
+        "box-shadow:0 1px 4px rgba(0,0,0,0.4)", "max-width:60%"
+      ].join(";");
+      container.appendChild(hud);
+      self.hud = hud;
+    },
+
+    _updateHud: function() {
+      var self = this;
+      var handle = self.handle;
+      if (!handle) return;
+      self._ensureHud();
+
+      var d = displayedFullWidth(handle);
+      var t = typeof handle.getTransform === "function" ? handle.getTransform() : null;
+      var src = self.sources[self.currentLayer];
+
+      var lines = [];
+      lines.push("TESSERA ▸ " + (self.tilesActive ? "TILES" : "raster"));
+      lines.push(
+        "raster: " + sourceLabel(src) +
+        "  [" + (self.currentLayer + 1) + "/" + self.sources.length + "]"
+      );
+      lines.push(
+        "shown:  " + (d != null ? Math.round(d) : "?") + "px" +
+        "  @ " + (t && t.s ? t.s.toFixed(2) : "?") + "×"
+      );
+
+      if (!self.dziUrl) {
+        lines.push("─────────");
+        lines.push("DZI: none on this file");
+      } else if (!self.manifest) {
+        lines.push("─────────");
+        lines.push(self.manifestPending ? "DZI: loading manifest…" : "DZI: ready (zoom to activate)");
+      } else {
+        var m = self.manifest;
+        lines.push("─────────");
+        lines.push("DZI: " + m.width + "×" + m.height + "  tile " + m.tileSize + " ov " + m.overlap);
+        var st = self._stats;
+        if (self.tilesActive && st) {
+          lines.push("level " + st.level + "/" + m.maxLevel + "  (" + st.levelW + "×" + st.levelH + ")");
+          lines.push("tiles: " + st.loaded + " loaded / " + st.shown + " shown / " + st.loading + " loading");
+        } else {
+          lines.push("tiles: inactive (zoom past top raster)");
+        }
+      }
+
+      self.hud.textContent = lines.join("\n");
     },
 
     destroyed: function() {
@@ -444,6 +554,10 @@
         self.overlay.parentNode.removeChild(self.overlay);
       }
       self.overlay = null;
+      if (self.hud && self.hud.parentNode) {
+        self.hud.parentNode.removeChild(self.hud);
+      }
+      self.hud = null;
       self.handle = null;
     }
   };

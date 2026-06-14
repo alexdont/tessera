@@ -96,6 +96,16 @@ defmodule Tessera.Layer do
       "Optional DOM id for the layer host element; defaults to `\"tessera-layer-<fresco_id>\"`."
   )
 
+  attr(:debug, :boolean,
+    default: false,
+    doc: """
+    Show a debug HUD over the viewer reporting the active raster source,
+    displayed width / zoom, DZI manifest info, current pyramid level, and
+    live tile counts (loaded / shown / loading). Can also be toggled at
+    runtime in any environment via `localStorage.tesseraDebug = "1"`.
+    """
+  )
+
   attr(:rest, :global)
 
   @doc """
@@ -127,6 +137,7 @@ defmodule Tessera.Layer do
       data-fresco-id={@fresco_id}
       data-sources={@sources_json}
       data-dzi-url={@dzi_url}
+      data-debug={@debug}
       class="hidden"
       aria-hidden="true"
       {@rest}

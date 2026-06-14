@@ -28,6 +28,12 @@ transform.
 
 ### Added
 
+- **Debug HUD.** A `debug` attr on `<Tessera.layer>` (or
+  `localStorage.tesseraDebug = "1"` at runtime) overlays a small panel
+  reporting the active raster source, displayed width / zoom, DZI manifest
+  info, current pyramid level, and live tile counts (loaded / shown /
+  loading) — so you can confirm resolution swaps and tile streaming are
+  actually happening.
 - **DZI tile streaming.** When `dzi_url` is set and the user zooms past the
   sharpest raster source, Tessera lazily fetches the `.dzi` manifest and
   streams the visible tiles at the matching pyramid level into a passive
