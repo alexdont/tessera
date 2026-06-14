@@ -35,9 +35,10 @@
   // ===========================================================================
 
   // A raster source may be upscaled up to this factor past its 1:1 pixel
-  // width before Tessera swaps to the next source up. A little upscaling is
-  // invisible and saves a fetch.
-  var UPGRADE_HEADROOM = 1.6;
+  // width before Tessera swaps to the next source up. Kept low so the image
+  // switches to a sharper source promptly on zoom-in (only ~10% upscale is
+  // tolerated, which is imperceptible) rather than staying soft.
+  var UPGRADE_HEADROOM = 1.1;
 
   // Downgrade hysteresis: only fall back to a lower source once the displayed
   // width drops 15% below that source's upgrade point. Prevents flicker when
@@ -47,7 +48,7 @@
   // Activate DZI tiles once the displayed full-image width exceeds the top
   // raster's pixel width by this factor (i.e. the sharpest raster is being
   // upscaled). Tiles deactivate below `top_width * this * hysteresis`.
-  var TILE_ACTIVATE_HEADROOM = 1.25;
+  var TILE_ACTIVATE_HEADROOM = 1.1;
 
   // ===========================================================================
   // Helpers

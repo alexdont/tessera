@@ -1,7 +1,7 @@
 defmodule Tessera.MixProject do
   use Mix.Project
 
-  @version "0.3.0"
+  @version "0.3.1"
   @description "DZI deep-zoom + progressive-resolution layer for Fresco image viewers in Phoenix. Generate DZI tile pyramids from images via ImageMagick; render them as a Fresco peer layer that swaps raster resolutions on zoom and streams DZI tiles for deep zoom on gigapixel images."
   @source_url "https://github.com/alexdont/tessera"
 

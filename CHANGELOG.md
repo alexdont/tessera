@@ -4,6 +4,18 @@ All notable changes to Tessera are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.1 — 2026-06-14
+
+Patch — quicker resolution switching on zoom.
+
+### Changed
+
+- Lowered `UPGRADE_HEADROOM` 1.6 → 1.1 and `TILE_ACTIVATE_HEADROOM`
+  1.25 → 1.1, so Tessera swaps to the sharper raster (and activates tiles)
+  as soon as the current source would be upscaled ~10%, instead of tolerating
+  up to 60% upscaling first. The image now sharpens promptly on zoom-in
+  rather than lingering soft. Downgrade hysteresis (0.85) is unchanged.
+
 ## 0.3.0 — 2026-06-14
 
 **Breaking change**: rewritten for Fresco's own viewer engine. Fresco 0.5
