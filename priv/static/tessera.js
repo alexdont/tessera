@@ -141,10 +141,12 @@
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-  // Runtime debug toggle: works in any environment without recompiling —
+  // Runtime debug toggle: works in any environment without recompiling.
+  // Either set `window.tesseraDebug = true` (instant, before reload) or
   // `localStorage.tesseraDebug = "1"` then reload.
   function tesseraDebugFlag() {
     try {
+      if (window.tesseraDebug === true) return true;
       return !!(window.localStorage && localStorage.getItem("tesseraDebug") === "1");
     } catch (_) {
       return false;
@@ -197,7 +199,16 @@
       }, 0);
 
       self.dziUrl = self.el.dataset.dziUrl || null;
-      self.debug = (self.el.dataset.debug != null) || tesseraDebugFlag();
+      self.attrDebug = self.el.dataset.debug != null;
+      self.debug = self.attrDebug || tesseraDebugFlag();
+      // One-line mount marker so you can confirm in the console that this
+      // (0.3) build is actually running and whether debug + DZI are active.
+      console.log(
+        "[Tessera] 0.3 layer mounted — debug:", self.debug,
+        "dzi:", !!self.dziUrl,
+        "sources:", self.widths,
+        "(toggle HUD: localStorage.tesseraDebug='1' or window.tesseraDebug=true, then pan/zoom)"
+      );
       self.currentLayer = 0;
       self.swapDebounce = null;
       self.tilesActive = false;
@@ -233,18 +244,17 @@
         }));
       }
 
-      // DZI tile overlay (and/or debug HUD): re-render aligned to the
-      // transform on every animation frame Fresco writes, plus lifecycle
-      // moments. The HUD alone also needs these so it tracks live zoom.
-      if (self.dziUrl || self.debug) {
-        var schedule = function() { self._scheduleRender(); };
-        self.unsubs.push(handle.on("animation", schedule));
-        self.unsubs.push(handle.on("pan", schedule));
-        self.unsubs.push(handle.on("zoom", schedule));
-        self.unsubs.push(handle.on("resize", schedule));
-        self.unsubs.push(handle.on("open", schedule));
-        self._scheduleRender();
-      }
+      // Subscribe to the transform events that drive the DZI overlay and the
+      // debug HUD. Always subscribed (the per-frame work no-ops when there's
+      // no DZI and debug is off) so the HUD can be toggled live at runtime
+      // without a reload — it appears on the next pan/zoom.
+      var schedule = function() { self._scheduleRender(); };
+      self.unsubs.push(handle.on("animation", schedule));
+      self.unsubs.push(handle.on("pan", schedule));
+      self.unsubs.push(handle.on("zoom", schedule));
+      self.unsubs.push(handle.on("resize", schedule));
+      self.unsubs.push(handle.on("open", schedule));
+      self._scheduleRender();
     },
 
     // ---- Progressive raster swap ------------------------------------------
@@ -271,8 +281,11 @@
       self.rafPending = true;
       requestAnimationFrame(function() {
         self.rafPending = false;
+        // Re-read the flag each frame so the HUD can be toggled at runtime.
+        self.debug = self.attrDebug || tesseraDebugFlag();
         if (self.dziUrl) self._renderTiles();
         if (self.debug) self._updateHud();
+        else self._removeHud();
       });
     },
 
@@ -497,6 +510,12 @@
       ].join(";");
       container.appendChild(hud);
       self.hud = hud;
+    },
+
+    _removeHud: function() {
+      var self = this;
+      if (self.hud && self.hud.parentNode) self.hud.parentNode.removeChild(self.hud);
+      self.hud = null;
     },
 
     _updateHud: function() {
