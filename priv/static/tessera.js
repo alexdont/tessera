@@ -369,8 +369,17 @@
       var t = handle.getTransform();
       if (!size || !t) return;
 
-      var canvasW = size.width;
-      var fullToCanvas = canvasW / m.width;       // DZI full-px -> canvas-px
+      // Map the DZI pyramid onto the image's ACTUAL canvas-px rect (position +
+      // size), per axis. Anchoring to the real image bounds — rather than
+      // assuming the image fills getCanvasSize() from the origin, and rather
+      // than reusing one width-based ratio for both axes — keeps tiles glued to
+      // the image even when the canvas is larger than the image or the variant
+      // aspect ratio differs slightly from the DZI's by rounding.
+      var imgs = typeof handle.getImages === "function" ? handle.getImages() : null;
+      var rect =
+        imgs && imgs.length
+          ? imgs[0]
+          : { x: 0, y: 0, width: size.width, height: size.height };
 
       // Choose the pyramid level whose width first covers the displayed width.
       var level = clamp(
@@ -381,20 +390,19 @@
       var levelScale = Math.pow(2, m.maxLevel - level); // full-px per level-px
       var levelW = Math.ceil(m.width / levelScale);
       var levelH = Math.ceil(m.height / levelScale);
-      // level-px -> canvas-px (the space imageToScreen consumes).
-      var levelToCanvas = levelScale * fullToCanvas;
+      // level-px -> canvas-px, per axis (the space imageToScreen consumes).
+      var levelToCanvasX = levelScale * (rect.width / m.width);
+      var levelToCanvasY = levelScale * (rect.height / m.height);
 
       var cols = Math.ceil(levelW / m.tileSize);
       var rows = Math.ceil(levelH / m.tileSize);
 
-      // Visible region in canvas-px -> level-px, to limit tiles to the viewport.
-      // level-px = canvas-px * (full/canvas) / levelScale.
-      var canvasToLevelPx = (m.width / canvasW) / levelScale;
+      // Visible region (canvas-px) -> level-px, to limit tiles to the viewport.
       var vb = handle.getViewportBounds();        // canvas-px {x,y,width,height}
-      var vx0 = vb ? vb.x * canvasToLevelPx : 0;
-      var vy0 = vb ? vb.y * canvasToLevelPx : 0;
-      var vx1 = vb ? (vb.x + vb.width) * canvasToLevelPx : levelW;
-      var vy1 = vb ? (vb.y + vb.height) * canvasToLevelPx : levelH;
+      var vx0 = vb ? (vb.x - rect.x) / levelToCanvasX : 0;
+      var vy0 = vb ? (vb.y - rect.y) / levelToCanvasY : 0;
+      var vx1 = vb ? (vb.x + vb.width - rect.x) / levelToCanvasX : levelW;
+      var vy1 = vb ? (vb.y + vb.height - rect.y) / levelToCanvasY : levelH;
 
       var colStart = clamp(Math.floor(vx0 / m.tileSize), 0, cols - 1);
       var colEnd = clamp(Math.floor(vx1 / m.tileSize), 0, cols - 1);
@@ -427,12 +435,12 @@
           var oLevelX = tileX - olLeft;
           var oLevelY = tileY - olTop;
           var tl = handle.imageToScreen({
-            x: oLevelX * levelToCanvas,
-            y: oLevelY * levelToCanvas
+            x: rect.x + oLevelX * levelToCanvasX,
+            y: rect.y + oLevelY * levelToCanvasY
           });
           var br = handle.imageToScreen({
-            x: (oLevelX + natW) * levelToCanvas,
-            y: (oLevelY + natH) * levelToCanvas
+            x: rect.x + (oLevelX + natW) * levelToCanvasX,
+            y: rect.y + (oLevelY + natH) * levelToCanvasY
           });
 
           var img = self.tiles[key];
