@@ -120,5 +120,26 @@ defmodule TesseraTest do
 
       assert html =~ ~s(id="my-layer")
     end
+
+    test "renders data-dzi-url when a dzi_url is given" do
+      html =
+        render_component(&Tessera.layer/1,
+          fresco_id: "photo",
+          sources: [%{url: "/medium.jpg", width: 1024}],
+          dzi_url: "/tiles/abc/photo.dzi"
+        )
+
+      assert html =~ ~s(data-dzi-url="/tiles/abc/photo.dzi")
+    end
+
+    test "omits data-dzi-url when no dzi_url is given" do
+      html =
+        render_component(&Tessera.layer/1,
+          fresco_id: "photo",
+          sources: [%{url: "/medium.jpg", width: 1024}]
+        )
+
+      refute html =~ "data-dzi-url"
+    end
   end
 end
