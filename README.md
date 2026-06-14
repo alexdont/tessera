@@ -11,8 +11,8 @@ A *tessera* is a single tile in a mosaic. Tessera the library produces and consu
 ```elixir
 def deps do
   [
-    {:fresco, "~> 0.1"},
-    {:tessera, "~> 0.2"}
+    {:fresco, "~> 0.7"},
+    {:tessera, "~> 0.3"}
   ]
 end
 ```
@@ -34,46 +34,40 @@ let liveSocket = new LiveSocket("/live", Socket, {
 
 ## Render the viewer
 
-Mount a Fresco viewer with a cheap preview, then attach a Tessera layer with the full source ladder. As the user zooms, Tessera swaps between layers automatically while preserving viewport bounds.
+Mount a Fresco viewer/canvas with a cheap preview, then attach a Tessera layer with the raster ladder (and, optionally, a DZI manifest for deep zoom). As the user zooms, Tessera swaps to a sharper raster while preserving viewport bounds; past the sharpest raster it streams DZI tiles.
 
-### Two layers — medium + DZI deep zoom
+### Raster ladder only — medium + large + original
 
 ```heex
-<Fresco.viewer
-  id="photo"
-  src={~p"/uploads/photo-medium.jpg"}
-  class="w-full h-[80vh] rounded"
-/>
+<Fresco.canvas id="photo" canvas={@canvas} class="w-full h-[80vh] rounded" />
 
 <Tessera.layer
   fresco_id="photo"
   sources={[
-    %{url: ~p"/uploads/photo-medium.jpg", width: 1024},
-    %{url: ~p"/dzi/photo.dzi"}
+    %{url: ~p"/uploads/photo-medium.jpg",   width: 800},
+    %{url: ~p"/uploads/photo-large.jpg",    width: 1920},
+    %{url: ~p"/uploads/photo-original.jpg", width: 6000}
   ]}
 />
 ```
 
-### Three layers — medium + large + DZI (recommended for 4K+ images)
+### Raster ladder + DZI deep zoom (for gigapixel images)
 
 ```heex
-<Fresco.viewer
-  id="poster"
-  src={~p"/uploads/photo-medium.jpg"}
-  class="w-full h-[80vh] rounded"
-/>
+<Fresco.canvas id="poster" canvas={@canvas} class="w-full h-[80vh] rounded" />
 
 <Tessera.layer
   fresco_id="poster"
   sources={[
-    %{url: ~p"/uploads/photo-medium.jpg", width: 1024},
-    %{url: ~p"/uploads/photo-large.jpg",  width: 2560},
-    %{url: ~p"/dzi/photo.dzi"}
+    %{url: ~p"/uploads/photo-medium.jpg",   width: 800},
+    %{url: ~p"/uploads/photo-large.jpg",    width: 1920},
+    %{url: ~p"/uploads/photo-original.jpg", width: 6000}
   ]}
+  dzi_url={~p"/dzi/photo.dzi"}
 />
 ```
 
-Each non-DZI source carries its intrinsic pixel `width`; Tessera computes the zoom threshold past which that source is upscaled and swaps to the next layer with hysteresis to prevent flicker. DZI entries omit `width` and act as the final layer (deep zoom covers all higher zoom levels).
+Each source carries its intrinsic pixel `width`; Tessera swaps to the next source up once the image is displayed wider than the current source (with hysteresis to prevent flicker). When `dzi_url` is set, Tessera activates tile streaming past the sharpest raster — so the cheap raster ladder covers everyday zoom and the DZI pyramid keeps gigapixel images crisp at extreme zoom.
 
 ---
 
@@ -154,17 +148,17 @@ Reads / existence checks / deletes are the consumer's job — Tessera never read
 
 ## Notes
 
-- **Tile URLs**: OSD derives tile URLs from a DZI manifest's location by appending `_files/<level>/<col>_<row>.<format>`. Make sure your tile-serving routes match.
-- **Viewport preservation on swap**: handled by Fresco's `swapSourcePreservingBounds` — Tessera asks Fresco to swap; Fresco does the bounds-preserving open.
-- **Built-in viewer chrome** (nav buttons, pan clamping, animations) comes from Fresco; Tessera only contributes the source-provider + multi-layer ladder.
+- **Tile URLs**: Tessera derives tile URLs from the `dzi_url` location by replacing the `.dzi` suffix with `_files/<level>/<col>_<row>.<format>` (any query string is preserved). Make sure your tile-serving routes match.
+- **Viewport preservation on swap**: handled by Fresco's `swapSourcePreservingBounds` (falling back to `setImageSrc`) — Tessera asks Fresco to swap; Fresco does the bounds-preserving open.
+- **Built-in viewer chrome** (nav buttons, pan clamping, animations) comes from Fresco; Tessera only contributes the raster ladder + DZI tile overlay.
 
 ---
 
-## What changed in 0.2
+## What changed in 0.3
 
-Tessera 0.1 was a standalone viewer (`<Tessera.viewer src=...>`). 0.2 is a Fresco layer (`<Tessera.layer fresco_id=... sources=...>`). The Fresco viewer owns OSD, the nav overlay, animations, and viewport clamping; Tessera focuses on what's actually distinctive (DZI source provider + multi-layer zoom logic).
+Fresco 0.5 dropped OpenSeadragon for its own CSS-transform engine, which broke Tessera 0.2 (it registered a DZI source provider with OSD and read `viewport.getZoom()`). Tessera 0.3 is a Fresco **peer layer** (the same model as Etcher): it gets the Fresco handle via `window.Fresco.onReady/2`, reads the live transform, swaps rasters with `swapSourcePreservingBounds`, and renders a DZI tile overlay aligned to the transform. `<Tessera.layer>` gains an optional `dzi_url` attribute; `sources` is unchanged.
 
-The server-side `Tessera.generate/3`, `Tessera.generate_manifest/3`, `Tessera.generate_tile/4`, and `Tessera.Storage` API are **unchanged**. Migration from 0.1 to 0.2 only affects the template — see the usage examples above.
+The server-side `Tessera.generate/3`, `Tessera.generate_manifest/3`, `Tessera.generate_tile/4`, and `Tessera.Storage` API are **unchanged**.
 
 ---
 

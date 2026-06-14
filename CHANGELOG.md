@@ -4,6 +4,43 @@ All notable changes to Tessera are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.0 — 2026-06-14
+
+**Breaking change**: rewritten for Fresco's own viewer engine. Fresco 0.5
+dropped OpenSeadragon for a CSS-transform engine, so Tessera 0.2's
+integration (a DZI source provider + OSD `viewport.getZoom()` /
+`swapSourcePreservingBounds` against the OSD instance) no longer worked.
+Tessera 0.3 is a Fresco **peer layer**, the same model as Etcher: it gets
+the Fresco handle via `window.Fresco.onReady/2` and reads the live
+transform.
+
+### Changed
+
+- **Fresco constraint** widened to `~> 0.5.9 or ~> 0.6.0 or ~> 0.7.0`
+  (was `~> 0.1`).
+- **`<Tessera.layer>`** gains an optional `dzi_url` attribute. `sources`
+  is unchanged (ordered low → high `%{url, width}` raster ladder); the
+  hidden hook host now also carries `data-dzi-url`.
+- **Progressive resolution swap** now reads zoom from the Fresco handle
+  (`getTransform().s × getCanvasSize().width`) instead of OSD's
+  `viewport.getZoom()/getHomeZoom()`, and swaps via the handle's
+  `swapSourcePreservingBounds` (falling back to `setImageSrc`).
+
+### Added
+
+- **DZI tile streaming.** When `dzi_url` is set and the user zooms past the
+  sharpest raster source, Tessera lazily fetches the `.dzi` manifest and
+  streams the visible tiles at the matching pyramid level into a passive
+  overlay aligned to the Fresco transform (re-rendered on the handle's
+  `animation`/`pan`/`zoom`/`resize`/`open` events). Off-screen tiles and
+  the manifest itself are fetched lazily; the overlay clears when the user
+  zooms back below the activation threshold.
+
+### Unchanged
+
+- Server-side DZI generation API (`generate/3`, `generate_manifest/3`,
+  `generate_tile/4`) and the `Tessera.Storage` behaviour.
+
 ## 0.2.1 — 2026-05-12
 
 Patch release — package metadata polish only, no code or behavior
