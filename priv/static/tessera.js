@@ -381,6 +381,12 @@
           ? imgs[0]
           : { x: 0, y: 0, width: size.width, height: size.height };
 
+      // imageToScreen returns PAGE coords (it adds the viewer element's
+      // getBoundingClientRect). Our overlay is positioned container-relative,
+      // so subtract the container origin — otherwise every tile is shifted by
+      // the viewer's position on the page.
+      var cr = handle.container.getBoundingClientRect();
+
       // Choose the pyramid level whose width first covers the displayed width.
       var level = clamp(
         Math.ceil(m.maxLevel - Math.log2(m.width / d)),
@@ -463,14 +469,15 @@
             self.tiles[key] = img;
           }
 
-          // Round position down and size up by the fractional remainder so
+          // Container-relative position (subtract the container origin), then
+          // round position down / size up by the fractional remainder so
           // adjacent tiles never leave a sub-pixel seam.
-          var left = Math.floor(tl.x);
-          var top = Math.floor(tl.y);
+          var left = Math.floor(tl.x - cr.left);
+          var top = Math.floor(tl.y - cr.top);
           img.style.left = left + "px";
           img.style.top = top + "px";
-          img.style.width = Math.ceil(br.x - left) + "px";
-          img.style.height = Math.ceil(br.y - top) + "px";
+          img.style.width = Math.ceil(br.x - cr.left - left) + "px";
+          img.style.height = Math.ceil(br.y - cr.top - top) + "px";
         }
       }
 
