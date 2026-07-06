@@ -1,7 +1,7 @@
 defmodule Tessera.MixProject do
   use Mix.Project
 
-  @version "0.3.1"
+  @version "0.3.2"
   @description "DZI deep-zoom + progressive-resolution layer for Fresco image viewers in Phoenix. Generate DZI tile pyramids from images via ImageMagick; render them as a Fresco peer layer that swaps raster resolutions on zoom and streams DZI tiles for deep zoom on gigapixel images."
   @source_url "https://github.com/alexdont/tessera"
 
@@ -24,7 +24,7 @@ defmodule Tessera.MixProject do
 
   defp deps do
     [
-      {:fresco, "~> 0.5.9 or ~> 0.6.0 or ~> 0.7.0"},
+      {:fresco, "~> 0.5.9 or ~> 0.6.0 or ~> 0.7.0 or ~> 0.8.0"},
       {:phoenix_live_view, "~> 1.1"},
       {:phoenix_html, "~> 4.0"},
       {:jason, "~> 1.4"},

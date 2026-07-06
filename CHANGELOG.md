@@ -4,6 +4,16 @@ All notable changes to Tessera are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.2 — 2026-07-06
+
+Patch — allow fresco 0.8.x.
+
+### Changed
+
+- Allow **fresco 0.8.x** (`~> 0.8.0` added to the version constraint). Fresco
+  0.8.0 is backward-compatible with the handle API Tessera uses — no code
+  changes required; this only widens the dependency so consumers can adopt it.
+
 ## 0.3.1 — 2026-06-14
 
 Patch — quicker resolution switching on zoom.
