@@ -4,6 +4,18 @@ All notable changes to Tessera are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.3 — 2026-07-16
+
+Patch — allow fresco 0.9.x.
+
+### Changed
+
+- Allow **fresco 0.9.x** (`~> 0.9.0` added to the version constraint). Fresco
+  0.9.0 is backward-compatible with the handle API Tessera uses — its changes
+  are additive (viewer `persist_rotation` + rotation handle methods, nav icon
+  refresh). Verified against it (compile + tests). No code changes — unblocks
+  consumers whose other deps (e.g. etcher 0.8.0) already allow fresco 0.9.x.
+
 ## 0.3.2 — 2026-07-06
 
 Patch — allow fresco 0.8.x.
