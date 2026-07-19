@@ -4,6 +4,12 @@ All notable changes to Tessera are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.4 — 2026-07-19
+
+Patch — allow fresco 0.10.x (`~> 0.10.0` added to the version
+constraint). Fresco 0.10.0 is backward-compatible with the stage/layer
+API Tessera renders into.
+
 ## 0.3.3 — 2026-07-16
 
 Patch — allow fresco 0.9.x.
