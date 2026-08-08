@@ -4,6 +4,17 @@ All notable changes to Tessera are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.5 — 2026-08-08
+
+Patch — allow fresco 0.11.x (`~> 0.11.0` added to the version
+constraint). Fresco 0.11.0 is backward-compatible with the stage/layer
+API Tessera renders into; its changes are a background-grid toggle,
+middle-drag panning, and an exemption that stops the canvas cancelling
+native drags over an overlay.
+
+Tessera is a transitive dependency of PhoenixKit, so this constraint held
+every host below fresco 0.11 whatever they asked for themselves.
+
 ## 0.3.4 — 2026-07-19
 
 Patch — allow fresco 0.10.x (`~> 0.10.0` added to the version
