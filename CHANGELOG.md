@@ -4,6 +4,16 @@ All notable changes to Tessera are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.6 — 2026-09-16
+
+Patch — allow fresco 0.12.x (`~> 0.12.0` added to the version
+constraint). Fresco 0.12.0 is backward-compatible with the stage/layer
+API Tessera renders into; its changes are clamp-state introspection for
+peer overlays (`isInfiniteCanvas`, `getZoomFloor`), a dot-grid toggle,
+and an overlay exemption from the native-drag cancel. Without this
+alternative, a host taking etcher 0.14 (whose out-of-bounds pan/zoom
+features want fresco ≥ 0.12) cannot resolve fresco past 0.11.
+
 ## 0.3.5 — 2026-08-08
 
 Patch — allow fresco 0.11.x (`~> 0.11.0` added to the version
