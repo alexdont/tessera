@@ -66,10 +66,18 @@
     return null;
   }
 
-  // Displayed width, in screen px, of the *whole* image at the current zoom.
+  // Displayed width, in DEVICE px, of the *whole* image at the current zoom.
   // This is the quantity we compare against each source's intrinsic width:
-  // `scale × canvas-width`. Returns null when the handle can't report it
-  // (e.g. a non-canvas viewer handle missing getCanvasSize/getTransform).
+  // `scale × canvas-width × devicePixelRatio`. The dpr factor is what makes
+  // the comparison honest on hiDPI displays: every raster pick, the tile
+  // activation threshold and the pyramid level choice all consume this one
+  // number, and in CSS px they all under-count the pixels the panel really
+  // shows. Measured on a 4K monitor at 200% OS scaling: a 1632-CSS-px
+  // viewer column reads as 1632 against large's 1920, so an 11384-px
+  // original never loaded and `large` sat stretched across 3264 physical
+  // pixels — visibly soft, with the sharp file right there on the server.
+  // Returns null when the handle can't report it (e.g. a non-canvas viewer
+  // handle missing getCanvasSize/getTransform).
   function displayedFullWidth(handle) {
     if (typeof handle.getCanvasSize !== "function" ||
         typeof handle.getTransform !== "function") {
@@ -78,7 +86,8 @@
     var size = handle.getCanvasSize();
     var t = handle.getTransform();
     if (!size || !t || !size.width || !t.s) return null;
-    return t.s * size.width;
+    var dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+    return t.s * size.width * dpr;
   }
 
   // Pick the raster source index for a given displayed width `d`, walking up

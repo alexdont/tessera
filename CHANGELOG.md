@@ -4,6 +4,21 @@ All notable changes to Tessera are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.7 — 2026-09-17
+
+### Fixed
+
+- **Source picks account for devicePixelRatio.** The displayed width every
+  decision compares against — raster rung picks, DZI tile activation, and
+  the pyramid level choice — was measured in CSS px, so hiDPI displays
+  under-counted the pixels actually being lit by the dpr factor. On a 4K
+  monitor at 200% OS scaling a ~1632-CSS-px viewer column read as smaller
+  than `large`'s 1920, so an 11384-px original never loaded and `large`
+  sat stretched across ~3264 physical pixels — visibly soft, with the
+  sharp file right there on the server. The width is now in device px
+  (`scale × canvas-width × devicePixelRatio`), and the same monitor walks
+  the ladder all the way up.
+
 ## 0.3.6 — 2026-09-16
 
 Patch — allow fresco 0.12.x (`~> 0.12.0` added to the version
