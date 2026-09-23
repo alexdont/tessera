@@ -4,6 +4,18 @@ All notable changes to Tessera are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.8 — 2026-09-23
+
+Patch — allow fresco 0.13.x (`~> 0.13.0` added to the version
+constraint). Nothing in Tessera changes: 0.13 is a gesture release, and
+the stage/layer API Tessera renders into is untouched. It reads a wheel
+event as the three things it can be (a notch zooms, two fingers on a
+trackpad move the view, a pinch zooms) and converts deltas that arrive
+in LINES into the pixels its rates are priced in — hardware that reports
+that way bought a fiftieth of the zoom it should. Without this
+alternative a host cannot resolve fresco past 0.12, whatever its own
+requirement says, and the failure names neither library.
+
 ## 0.3.7 — 2026-09-17
 
 ### Fixed
