@@ -4,6 +4,16 @@ All notable changes to Tessera are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.9 — 2026-10-15
+
+Patch — allow fresco 0.14.x (`~> 0.14.0` added to the version
+constraint). Nothing in Tessera changes: 0.14's `actual_size` (real-pixel
+zoom, an actual-size button and a zoom control) is an opt-in attribute,
+and its dot grid is the viewer's own background — the stage/layer API
+Tessera renders into is untouched. Without this alternative a host cannot
+resolve fresco past 0.13, whatever its own requirement says, and the
+failure names neither library.
+
 ## 0.3.8 — 2026-09-23
 
 Patch — allow fresco 0.13.x (`~> 0.13.0` added to the version
