@@ -4,6 +4,16 @@ All notable changes to Tessera are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.10 — 2026-10-22
+
+Patch — allow fresco 0.15.x (`~> 0.15.0` added to the version
+constraint). Nothing in Tessera changes: 0.15 adds a gallery strip laid
+over the viewer (`Fresco.gallery`), an opt-in `pan_centre` attribute and
+a truer first paint for `actual_size` canvases — the stage/layer API
+Tessera renders into is untouched. Without this alternative a host cannot
+resolve fresco past 0.14, whatever its own requirement says, and the
+failure names neither library.
+
 ## 0.3.9 — 2026-10-15
 
 Patch — allow fresco 0.14.x (`~> 0.14.0` added to the version
