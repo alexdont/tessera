@@ -4,6 +4,15 @@ All notable changes to Tessera are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.11 — 2026-11-11
+
+Patch — allow fresco 0.16.x (`~> 0.16.0` added to the version
+constraint). Nothing in Tessera changes: 0.16 adds "Export as PDF"
+(`pdf_export`, export layers for extensions) and `nav_style: :bar`, the nav
+drawn as one dark bar — the stage/layer API Tessera uses is untouched.
+Also moves the lock off advisory-flagged phoenix_html 4.3.0 and
+plug_crypto 2.2.0.
+
 ## 0.3.10 — 2026-10-22
 
 Patch — allow fresco 0.15.x (`~> 0.15.0` added to the version
